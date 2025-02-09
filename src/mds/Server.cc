@@ -2640,7 +2640,7 @@ void Server::handle_client_request(const cref_t<MClientRequest> &req)
   trim_completed_request_list(req->get_oldest_client_tid(), session);
 
   // register + dispatch
-  MDRequestRef mdr = mdcache->request_start(req);
+  MDRequestRef mdr = mdcache->request_start(req); // TODO: This is probably where the initiated_at is determined
   if (!mdr.get()) {
     dout(5) << __func__ << ": possibly duplicate op " << *req << dendl;
     if (req->is_queued_for_replay())
@@ -2707,6 +2707,7 @@ void Server::handle_osd_map()
 
 void Server::dispatch_client_request(const MDRequestRef& mdr)
 {
+  mdr->mark_event("twelho: dispatch_client_request start");
   // we shouldn't be waiting on anyone.
   ceph_assert(!mdr->has_more() || mdr->more()->waiting_on_peer.empty());
 
@@ -2894,6 +2895,7 @@ void Server::dispatch_client_request(const MDRequestRef& mdr)
     dout(1) << " unknown client op " << req->get_op() << dendl;
     respond_to_request(mdr, -EOPNOTSUPP);
   }
+  mdr->mark_event("twelho: dispatch_client_request done");
 }
 
 
@@ -4740,8 +4742,10 @@ bool Server::is_valid_layout(file_layout_t *layout)
   return true;
 }
 
+// TODO: This is probably the important bit, where is the profiling timer (initiated_at) started?
 void Server::handle_client_openc(const MDRequestRef& mdr)
 {
+  mdr->mark_event("twelho: handle_client_openc start");
   const cref_t<MClientRequest> &req = mdr->client_request;
   client_t client = mdr->get_client();
 
@@ -4884,10 +4888,14 @@ void Server::handle_client_openc(const MDRequestRef& mdr)
 
   journal_and_reply(mdr, newi, dn, le, fin);
 
+  mdr->mark_event("twelho: maybe_fragment");
+
   // We hit_dir (via hit_inode) in our finish callback, but by then we might
   // have overshot the split size (multiple opencs in flight), so here is
   // an early chance to split the dir if this openc makes it oversized.
   mds->balancer->maybe_fragment(dir, false);
+  mdr->mark_event("twelho: maybe_fragment done");
+  mdr->mark_event("twelho: handle_client_openc done");
 }
 
 
