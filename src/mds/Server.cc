@@ -409,6 +409,7 @@ public:
     ceph_assert(r == 0);
     server->_session_logged(session, state_seq, open, cmapv, inos_to_free, inotablev, inos_to_purge, ls);
     if (fin) {
+      mdr->mark_event("twelho: complete 2 (server->_session_logged)");
       fin->complete(r);
     }
   }
@@ -1439,7 +1440,7 @@ void Server::kill_session(Session *session, Context *on_safe)
       ceph_assert(session->is_closed() ||
 		  session->is_importing());
       if (on_safe)
-	on_safe->complete(0);
+	on_safe->complete(0); // TODO: Probably not this (kill_session)
     }
   }
 }
@@ -1784,7 +1785,7 @@ void Server::reconnect_gather_finish()
     dout(7) << " snaptable cache isn't synced, delaying state transition" << dendl;
     mds->snapclient->wait_for_sync(reconnect_done);
   } else {
-    reconnect_done->complete(0);
+    reconnect_done->complete(0); // TODO: Probably not this (reconnect_gather_finish)
   }
   reconnect_done = NULL;
 }
@@ -2133,6 +2134,7 @@ void Server::respond_to_request(const MDRequestRef& mdr, int r)
     auto c = mdr->internal_op_finish;
     if (!c)
       ceph_abort_msg("trying to respond to internal op without finisher");
+    mdr->mark_event("twelho: complete 1 (mdcache->request_finish)");
     mdcache->request_finish(mdr);
     c->complete(r);
   }

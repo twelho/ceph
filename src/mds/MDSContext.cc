@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -122,7 +122,7 @@ void MDSIOContextBase::complete(int r) {
 void MDSLogContextBase::complete(int r) {
   MDLog *mdlog = get_mds()->mdlog;
   uint64_t safe_pos = write_pos;
-  pre_finish(r);
+  pre_finish(r); // TODO: This is the "journal_committed: " event
   // MDSIOContext::complete() free this
   MDSIOContextBase::complete(r);
   // safe_pos must be updated after MDSIOContext::complete() call
