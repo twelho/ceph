@@ -143,6 +143,7 @@ public:
   }
 };
 
+// TODO: This specifically overrides pre_finish to cause the event we're tracing
 class ServerLogContext : public MDSLogContextBase {
 protected:
   Server *server;
@@ -2643,6 +2644,7 @@ void Server::handle_client_request(const cref_t<MClientRequest> &req)
 
   // register + dispatch
   MDRequestRef mdr = mdcache->request_start(req); // TODO: This is probably where the initiated_at is determined
+  mdr->mark_event("twelho: mdr created");
   if (!mdr.get()) {
     dout(5) << __func__ << ": possibly duplicate op " << *req << dendl;
     if (req->is_queued_for_replay())
@@ -2668,7 +2670,9 @@ void Server::handle_client_request(const cref_t<MClientRequest> &req)
     req->releases.clear();
   }
 
+  mdr->mark_event("twelho: dispatch_client_request");
   dispatch_client_request(mdr);
+  mdr->mark_event("twelho: dispatch_client_request done");
   return;
 }
 
@@ -4697,6 +4701,7 @@ void Server::handle_client_open(const MDRequestRef& mdr)
   respond_to_request(mdr, 0);
 }
 
+// TODO: This here is openc -> relevant
 class C_MDS_openc_finish : public ServerLogContext {
   CDentry *dn;
   CInode *newi;
@@ -4704,28 +4709,40 @@ public:
   C_MDS_openc_finish(Server *s, const MDRequestRef& r, CDentry *d, CInode *ni) :
     ServerLogContext(s, r), dn(d), newi(ni) {}
   void finish(int r) override {
+    // TODO: Let's just trust that we have mdr here since it's passed by reference in the constructor
+    mdr->mark_event("twelho: magic openc_finish function");
     ceph_assert(r == 0);
 
+    mdr->mark_event("twelho: crash test");
     // crash current MDS and the replacing MDS will test the journal
     ceph_assert(!g_conf()->mds_kill_after_journal_logs_flushed);
+    mdr->mark_event("twelho: crash test passed");
 
+    mdr->mark_event("twelho: pop_projected_linkage");
     dn->pop_projected_linkage();
 
+    mdr->mark_event("twelho: mark_dirty");
     // dirty inode, dn, dir
     newi->mark_dirty(mdr->ls);
     newi->mark_dirty_parent(mdr->ls, true);
 
+    mdr->mark_event("twelho: apply");
     mdr->apply();
 
+    mdr->mark_event("twelho: locker->share_inode_max_size");
     get_mds()->locker->share_inode_max_size(newi);
 
     MDRequestRef null_ref;
+    mdr->mark_event("twelho: mdcache->send_dentry_link");
     get_mds()->mdcache->send_dentry_link(dn, null_ref);
 
+    mdr->mark_event("twelho: balancer->hit_inode");
     get_mds()->balancer->hit_inode(newi, META_POP_IWR);
 
+    mdr->mark_event("twelho: server->respond_to_request");
     server->respond_to_request(mdr, 0);
 
+    mdr->mark_event("twelho: final assert");
     ceph_assert(g_conf()->mds_kill_openc_at != 1);
   }
 };
