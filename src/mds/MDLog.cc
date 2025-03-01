@@ -436,6 +436,8 @@ void MDLog::_submit_entry(LogEvent *le, MDSLogContextBase* c)
   pending_events[ls->seq].push_back(PendingEvent(le, c)); // TODO: This is where the event is queued
   num_events++;
 
+  flush(); // TODO: YOLO: trigger a flush right after queueing the event
+
   if (logger) {
     logger->inc(l_mdl_evadd);
     logger->set(l_mdl_ev, num_events);
@@ -507,7 +509,7 @@ void MDLog::_submit_thread()
     // TODO: The bottleneck is probably here
     map<uint64_t,list<PendingEvent> >::iterator it = pending_events.begin();
     if (it == pending_events.end()) {
-      submit_cond.wait(locker);
+      submit_cond.wait(locker); // TODO: This thread might also be sleeping until the MDLog flush() or wait_for_safe()...
       continue;
     }
 
@@ -521,7 +523,7 @@ void MDLog::_submit_thread()
     it->second.pop_front();
 
     // TODO: Can we identify a write event?
-    data.flush = true; // TODO: YOLO: always flush
+    // data.flush = true; // TODO: YOLO: always flush
 
     locker.unlock();
 
