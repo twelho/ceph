@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 #ifndef CEPH_MDLOG_H
 #define CEPH_MDLOG_H
@@ -83,7 +83,7 @@ public:
     return segments.empty() ? NULL : segments.rbegin()->second;
   }
 
-  LogSegment *get_current_segment() { 
+  LogSegment *get_current_segment() {
     ceph_assert(!segments.empty());
     return segments.rbegin()->second;
   }
@@ -136,6 +136,7 @@ public:
 
   void finish_head_waiters();
 
+  // TODO: This is part of the slowness problem, but itself isn't slow
   void submit_entry(LogEvent *e, MDSLogContextBase* c = 0) {
     std::lock_guard l(submit_mutex);
     _submit_entry(e, c);
@@ -158,7 +159,7 @@ public:
   }
   int trim_to(SegmentBoundary::seq_t);
 
-  void create(MDSContext *onfinish);  // fresh, empty log! 
+  void create(MDSContext *onfinish);  // fresh, empty log!
   void open(MDSContext *onopen);      // append() or replay() to follow!
   void reopen(MDSContext *onopen);
   void append();

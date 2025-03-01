@@ -129,6 +129,7 @@ void MDSLogContextBase::complete(int r) {
   mdlog->set_safe_pos(safe_pos);
 }
 
+// TODO: Is this what calls openc_finish?
 void MDSIOContextWrapper::finish(int r)
 {
   fin->complete(r);

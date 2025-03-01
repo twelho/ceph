@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,16 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
+ */
+
+ /*
+TODO: twelho's notes: this is probably the source of the issue. There's some kind of asynchronous processor for
+pending_events, which is processing the events very slowly. Once an event is processed it's complete()/finish()
+callback is invoked, which signals journal_committed for the event and it can finish, returning confirmation to
+the client. The question is now, why is this processing pending_events so slowly?
  */
 
 #include "MDSRank.h"
@@ -183,7 +190,7 @@ void MDLog::finish_head_waiters()
   }
 }
 
-void MDLog::write_head(MDSContext *c) 
+void MDLog::write_head(MDSContext *c)
 {
   ceph_assert(ceph_mutex_is_locked_by_me(mds->mds_lock));
 
@@ -208,17 +215,17 @@ void MDLog::write_head(MDSContext *c)
 
 uint64_t MDLog::get_read_pos() const
 {
-  return journaler->get_read_pos(); 
+  return journaler->get_read_pos();
 }
 
 uint64_t MDLog::get_write_pos() const
 {
-  return journaler->get_write_pos(); 
+  return journaler->get_write_pos();
 }
 
 uint64_t MDLog::get_safe_pos() const
 {
-  return journaler->get_write_safe_pos(); 
+  return journaler->get_write_safe_pos();
 }
 
 // estimate the replay completion time based on mdlog journal pointers
@@ -359,7 +366,7 @@ void MDLog::append()
   dout(5) << "append positioning at end and marking writeable" << dendl;
   journaler->set_read_pos(journaler->get_write_pos());
   journaler->set_expire_pos(journaler->get_write_pos());
-  
+
   journaler->set_writeable();
 
   logger->set(l_mdl_expos, journaler->get_write_pos());
@@ -426,7 +433,7 @@ void MDLog::_submit_entry(LogEvent *le, MDSLogContextBase* c)
   le->set_stamp(ceph_clock_now());
 
   mdsmap_up_features = mds->mdsmap->get_up_features();
-  pending_events[ls->seq].push_back(PendingEvent(le, c));
+  pending_events[ls->seq].push_back(PendingEvent(le, c)); // TODO: This is where the event is queued
   num_events++;
 
   if (logger) {
@@ -497,6 +504,7 @@ void MDLog::_submit_thread()
       continue;
     }
 
+    // TODO: The bottleneck is probably here
     map<uint64_t,list<PendingEvent> >::iterator it = pending_events.begin();
     if (it == pending_events.end()) {
       submit_cond.wait(locker);
@@ -512,8 +520,12 @@ void MDLog::_submit_thread()
     PendingEvent data = it->second.front();
     it->second.pop_front();
 
+    // TODO: Can we identify a write event?
+    data.flush = true; // TODO: YOLO: always flush
+
     locker.unlock();
 
+    // TODO: Check if we have a LogEvent
     if (data.le) {
       LogEvent *le = data.le;
       LogSegment *ls = le->_segment;
@@ -549,8 +561,16 @@ void MDLog::_submit_thread()
 	fin = new C_MDL_Flushed(this, new_write_pos);
       }
 
+      // TODO: Both of these branches wait for a flush before (not) issuing a flush
+      // All this does is push a waiter to a queue for the current write position
+      // I presume that waiter is then responsible for finishing the request through
+      // *fin once flushing advances sufficiently
+
+      // TODO: If this just sits here, what triggers the journaler to perform a flush?
       journaler->wait_for_flush(fin);
 
+      // TODO: This is taking a lot of time
+      // TODO: Note that the events themselves don't seem to set data.flush
       if (data.flush)
 	journaler->flush();
 
@@ -602,6 +622,7 @@ void MDLog::flush()
   bool do_flush = unflushed > 0;
   unflushed = 0;
   if (!pending_events.empty()) {
+    // TODO: This is the only place where the pending event schedules a flush, which is basically when the entire log is flushed
     pending_events.rbegin()->second.push_back(PendingEvent(NULL, NULL, true));
     do_flush = false;
     submit_cond.notify_all();
@@ -734,8 +755,8 @@ void MDLog::trim()
   std::unique_lock locker{submit_mutex};
 
   // trim!
-  dout(10) << "trim " 
-	   << segments.size() << " / " << max_segments << " segments, " 
+  dout(10) << "trim "
+	   << segments.size() << " / " << max_segments << " segments, "
 	   << num_events << " / " << max_ev << " events"
 	   << ", " << expiring_segments.size() << " (" << expiring_events << ") expiring"
 	   << ", " << expired_segments.size() << " (" << expired_events << ") expired"
@@ -794,7 +815,7 @@ void MDLog::trim()
     LogSegment *ls = p->second;
     ceph_assert(ls);
     ++p;
-    
+
     if (pending_events.count(ls->seq) ||
 	ls->end > safe_pos) {
       dout(5) << "trim " << *ls << " is not fully flushed yet: safe "
@@ -922,7 +943,7 @@ void MDLog::try_expire(LogSegment *ls, int op_prio)
     _expired(ls);
     submit_mutex.unlock();
   }
-  
+
   logger->set(l_mdl_segexg, expiring_segments.size());
   logger->set(l_mdl_evexg, expiring_events);
 }
@@ -1010,7 +1031,7 @@ void MDLog::_expired(LogSegment *ls)
 
     // Trigger all waiters
     finish_contexts(g_ceph_context, ls->expiry_waiters);
-    
+
     logger->inc(l_mdl_evex, ls->num_events);
     logger->inc(l_mdl_segex);
   }
@@ -1066,7 +1087,7 @@ void MDLog::replay(MDSContext *c)
  *
  * This is a separate thread because of the way it is initialized from inside
  * the mds lock, which is also the global objecter lock -- rather than split
- * it up into hard-to-read async operations linked up by contexts, 
+ * it up into hard-to-read async operations linked up by contexts,
  *
  * When this function completes, the `journaler` attribute will be set to
  * a Journaler instance using the latest available serialization format.
@@ -1309,7 +1330,7 @@ void MDLog::_reformat_journal(JournalPointer const &jp_in, Journaler *old_journa
 
       if (auto sb = dynamic_cast<SegmentBoundary*>(le.get()); sb) {
         if (sb->get_seq() == 0) {
-          // A non-explicit event seq: the effective sequence number 
+          // A non-explicit event seq: the effective sequence number
           // of this segment is it's position in the old journal and
           // the new effective sequence number will be its position
           // in the new journal.
@@ -1426,7 +1447,7 @@ void MDLog::_replay_thread()
       std::this_thread::sleep_for(sleep_time);
     }
     // wait for read?
-    journaler->check_isreadable(); 
+    journaler->check_isreadable();
     if (journaler->get_error()) {
       r = journaler->get_error();
       dout(0) << "_replay journaler got error " << r << ", aborting" << dendl;
@@ -1489,7 +1510,7 @@ void MDLog::_replay_thread()
       dout(10) << "_replay: read_pos == write_pos" << dendl;
       break;
     }
-    
+
     // read it
     uint64_t pos = journaler->get_read_pos();
     bufferlist bl;
@@ -1497,11 +1518,11 @@ void MDLog::_replay_thread()
     if (!r && journaler->get_error())
       continue;
     ceph_assert(r);
-    
+
     // unpack event
     auto le = LogEvent::decode_event(bl.cbegin());
     if (!le) {
-      dout(0) << "_replay " << pos << "~" << bl.length() << " / " << journaler->get_write_pos() 
+      dout(0) << "_replay " << pos << "~" << bl.length() << " / " << journaler->get_write_pos()
 	      << " -- unable to decode event" << dendl;
       dout(0) << "dump of unknown or corrupt event:\n";
       bl.hexdump(*_dout);
@@ -1604,7 +1625,7 @@ void MDLog::_replay_thread()
       return;
     }
     pre_segments_size = segments.size();  // get num of logs when replay is finished
-    finish_contexts(g_ceph_context, waitfor_replay, r);  
+    finish_contexts(g_ceph_context, waitfor_replay, r);
   }
 
   dout(10) << "_replay_thread finish" << dendl;

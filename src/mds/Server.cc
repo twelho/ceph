@@ -155,7 +155,7 @@ protected:
   MDRequestRef mdr;
   void pre_finish(int r) override {
     if (mdr)
-      mdr->mark_event("journal_committed: ");
+      mdr->mark_event("journal_committed: twelho mod");
   }
 public:
   explicit ServerLogContext(Server *s) : server(s) {
@@ -2058,6 +2058,8 @@ void Server::force_clients_readonly()
     mds->send_message_client(make_message<MClientSession>(CEPH_SESSION_FORCE_RO), session);
   }
 }
+
+// TODO: *fin is doing stuff after the dreaded journal_committed
 
 /*******
  * some generic stuff for finishing off requests
@@ -4702,6 +4704,7 @@ void Server::handle_client_open(const MDRequestRef& mdr)
 }
 
 // TODO: This here is openc -> relevant
+// TODO: finish() in its entirety happens only AFTER the infamous "journal_committed: " and takes no time at all, what's going on?
 class C_MDS_openc_finish : public ServerLogContext {
   CDentry *dn;
   CInode *newi;
