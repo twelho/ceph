@@ -436,7 +436,9 @@ void MDLog::_submit_entry(LogEvent *le, MDSLogContextBase* c)
   pending_events[ls->seq].push_back(PendingEvent(le, c)); // TODO: This is where the event is queued
   num_events++;
 
-  flush(); // TODO: YOLO: trigger a flush right after queueing the event
+  // TODO: This deadlocks
+  // flush(); // TODO: YOLO: trigger a flush right after queueing the event
+  submit_cond.notify_all(); // TODO: YOLO: unleash the submit thread immediately
 
   if (logger) {
     logger->inc(l_mdl_evadd);
@@ -523,7 +525,7 @@ void MDLog::_submit_thread()
     it->second.pop_front();
 
     // TODO: Can we identify a write event?
-    // data.flush = true; // TODO: YOLO: always flush
+    data.flush = true; // TODO: YOLO: always flush
 
     locker.unlock();
 
