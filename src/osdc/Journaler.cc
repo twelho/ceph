@@ -85,6 +85,9 @@ void Journaler::_set_layout(file_layout_t const *l)
 {
   layout = *l;
 
+  // TODO: Debug this
+  ldout(cct, 0) << "twelho: set layout: stripe_unit = " << layout.stripe_unit << ", stripe_count = " << layout.stripe_count << ", object_size = " << layout.object_size << dendl;
+
   if (layout.pool_id != pg_pool) {
     // user can reset pool id through cephfs-journal-tool
     lderr(cct) << "may got older pool id from header layout" << dendl;
@@ -155,7 +158,7 @@ public:
   }
 };
 
-void Journaler::recover(Context *onread) 
+void Journaler::recover(Context *onread)
 {
   lock_guard l(lock);
   if (state == STATE_STOPPING) {
@@ -696,6 +699,7 @@ void Journaler::_do_flush(unsigned amount)
     }
   }
 
+  // TODO: &layout defines the important stuff
   filer.write(ino, &layout, snapc,
 	      flush_pos, len, write_bl, ceph::real_clock::now(),
 	      0,
@@ -705,7 +709,7 @@ void Journaler::_do_flush(unsigned amount)
   ceph_assert(write_buf.length() == write_pos - flush_pos);
   write_buf_throttle.put(len);
   ldout(cct, 20) << "write_buf_throttle put, len " << len << dendl;
- 
+
   ldout(cct, 10)
     << "_do_flush (prezeroing/prezero)/write/flush/safe pointers now at "
     << "(" << prezeroing_pos << "/" << prezero_pos << ")/" << write_pos
@@ -999,7 +1003,7 @@ void Journaler::_assimilate_prefetch()
 
   if (got_any) {
     ldout(cct, 10) << "_assimilate_prefetch read_buf now " << read_pos << "~"
-		   << read_buf.length() << ", read pointers read_pos=" << read_pos 
+		   << read_buf.length() << ", read pointers read_pos=" << read_pos
                    << " received_pos=" << received_pos << " requested_pos=" << requested_pos
 		   << dendl;
 
@@ -1304,7 +1308,7 @@ bool Journaler::try_read_entry(bufferlist& bl)
 void Journaler::wait_for_readable(Context *onreadable)
 {
   lock_guard l(lock);
-  _wait_for_readable(onreadable); 
+  _wait_for_readable(onreadable);
 }
 
 void Journaler::_wait_for_readable(Context *onreadable)
