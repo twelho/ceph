@@ -85,8 +85,20 @@ void Journaler::_set_layout(file_layout_t const *l)
 {
   layout = *l;
 
+  ldout(cct, 10) << "twelho: original layout: stripe_unit = " << layout.stripe_unit
+    << ", stripe_count = " << layout.stripe_count
+    << ", object_size = " << layout.object_size
+    << dendl;
+
+  // TODO: Something still passes in the default layout here, try hard-overriding it here next
+  layout.stripe_unit = 1048576;
+  layout.object_size = 1048576;
+
   // TODO: Debug this
-  ldout(cct, 10) << "twelho: set layout: stripe_unit = " << layout.stripe_unit << ", stripe_count = " << layout.stripe_count << ", object_size = " << layout.object_size << dendl;
+  ldout(cct, 10) << "twelho: (override) set_layout: stripe_unit = " << layout.stripe_unit
+    << ", stripe_count = " << layout.stripe_count
+    << ", object_size = " << layout.object_size
+    << dendl;
 
   if (layout.pool_id != pg_pool) {
     // user can reset pool id through cephfs-journal-tool
