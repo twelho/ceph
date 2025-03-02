@@ -86,7 +86,7 @@ void Journaler::_set_layout(file_layout_t const *l)
   layout = *l;
 
   // TODO: Debug this
-  ldout(cct, 0) << "twelho: set layout: stripe_unit = " << layout.stripe_unit << ", stripe_count = " << layout.stripe_count << ", object_size = " << layout.object_size << dendl;
+  ldout(cct, 10) << "twelho: set layout: stripe_unit = " << layout.stripe_unit << ", stripe_count = " << layout.stripe_count << ", object_size = " << layout.object_size << dendl;
 
   if (layout.pool_id != pg_pool) {
     // user can reset pool id through cephfs-journal-tool
