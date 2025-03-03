@@ -91,8 +91,10 @@ void Journaler::_set_layout(file_layout_t const *l)
     << dendl;
 
   // TODO: Something still passes in the default layout here, try hard-overriding it here next
-  layout.stripe_unit = 1048576;
-  layout.object_size = 1048576;
+  // layout.stripe_unit = 1048576;
+  // layout.object_size = 1048576;
+  layout.stripe_unit = 100 * 1024;
+  layout.object_size = 100 * 1024;
 
   // TODO: Debug this
   ldout(cct, 10) << "twelho: (override) set_layout: stripe_unit = " << layout.stripe_unit
